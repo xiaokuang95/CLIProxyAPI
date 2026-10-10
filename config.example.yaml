@@ -105,6 +105,19 @@ access:
     - "your-api-key-2"
     - "your-api-key-3"
 
+  # Optional: restrict a client key to specific upstream providers.
+  # Keys omitted from every group can use all providers. Group keys authenticate
+  # even if they are not also listed under api-keys.
+  # Provider names match routing keys: claude, gemini, gemini-cli, codex, antigravity,
+  # vertex, xai, kimi, openai-compat provider name, plugin id, ...
+  # groups:
+  #   claude-only:
+  #     api-keys: ["your-api-key-1"]
+  #     providers: ["claude"]
+  #   gemini-only:
+  #     api-keys: ["your-api-key-2"]
+  #     providers: ["gemini"]
+
 # Optional credential concurrency and observation contracts.
 
 # credentials:

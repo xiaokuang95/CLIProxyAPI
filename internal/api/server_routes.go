@@ -666,7 +666,11 @@ func (s *Server) handleGrokModels(c *gin.Context) {
 		}
 		models = grokModelsFromHomeEntries(entries)
 	} else {
-		models = grokModelsFromRegistryInfos(registry.GetGlobalRegistry().GetAvailableModelInfos())
+		infos := registry.GetGlobalRegistry().GetAvailableModelInfos()
+		if s.handlers != nil {
+			infos = s.handlers.FilterModelInfosForCaller(c, infos)
+		}
+		models = grokModelsFromRegistryInfos(infos)
 	}
 	s.writeModelListResponse(c, "openai", grokbuild.BuildResponse(models))
 }

@@ -12,6 +12,8 @@ type Config = internalconfig.Config
 
 type ModelCatalogs = internalconfig.ModelCatalogs
 
+type AccessGroup = internalconfig.AccessGroup
+
 type ClientConfig = internalconfig.ClientConfig
 type CodexClientConfig = internalconfig.CodexClientConfig
 type StreamingConfig = internalconfig.StreamingConfig
@@ -54,6 +56,10 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 
 func ResolveOAuthModelSetting(settings []OAuthModelSetting, modelID, metadataModelID, modelName string) *OAuthModelSetting {
 	return internalconfig.ResolveOAuthModelSetting(settings, modelID, metadataModelID, modelName)
+}
+
+func ProviderAllowed(provider string, allowed map[string]struct{}) bool {
+	return internalconfig.ProviderAllowed(provider, allowed)
 }
 
 func ParseConfigBytes(data []byte) (*Config, error) { return internalconfig.ParseConfigBytes(data) }

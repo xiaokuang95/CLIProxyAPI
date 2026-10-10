@@ -195,6 +195,9 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 	} else if !reflect.DeepEqual(trimStrings(oldCfg.APIKeys), trimStrings(newCfg.APIKeys)) {
 		changes = append(changes, "api-keys: values updated (count unchanged, redacted)")
 	}
+	if !reflect.DeepEqual(oldCfg.AccessGroups, newCfg.AccessGroups) {
+		changes = append(changes, fmt.Sprintf("access.groups count: %d -> %d", len(oldCfg.AccessGroups), len(newCfg.AccessGroups)))
+	}
 	if len(oldCfg.GeminiKey) != len(newCfg.GeminiKey) {
 		changes = append(changes, fmt.Sprintf("gemini-api-key count: %d -> %d", len(oldCfg.GeminiKey), len(newCfg.GeminiKey)))
 	} else {

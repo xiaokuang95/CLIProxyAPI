@@ -10,13 +10,17 @@ func (h *OpenAIAPIHandler) codexClientModelsResponse(clientVersion ...string) ma
 	if len(clientVersion) > 0 {
 		version = clientVersion[0]
 	}
+	return h.codexClientModelsFrom(h.Models(), version)
+}
+
+func (h *OpenAIAPIHandler) codexClientModelsFrom(models []map[string]any, clientVersion string) map[string]any {
 	optimizeMultiAgentV2 := h != nil && h.Cfg != nil && h.Cfg.Client.Codex.OptimizeMultiAgentV2
 	var applyPatchCapabilityForModel codexmodels.ApplyPatchCapabilityForModelFunc
 	if h != nil && h.Cfg != nil && h.Cfg.Client.Codex.EnableApplyPatch {
 		applyPatchCapabilityForModel = h.SupportsApplyPatchModel
 	}
 	modelRegistry := registry.GetGlobalRegistry()
-	return codexmodels.BuildResponseForClientWithToolCapabilities(h.Models(), modelRegistry.GetModelProviders, modelRegistry.GetResponsesWebSearchCapability, applyPatchCapabilityForModel, optimizeMultiAgentV2, version)
+	return codexmodels.BuildResponseForClientWithToolCapabilities(models, modelRegistry.GetModelProviders, modelRegistry.GetResponsesWebSearchCapability, applyPatchCapabilityForModel, optimizeMultiAgentV2, clientVersion)
 }
 
 // CodexClientModelsResponse builds a Codex client model response.

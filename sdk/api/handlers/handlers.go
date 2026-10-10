@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/interfaces"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/logging"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/thinking"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
@@ -404,6 +405,71 @@ func NewBaseAPIHandlers(cfg *config.SDKConfig, authManager *coreauth.Manager) *B
 //   - cfg: The new application configuration
 func (h *BaseAPIHandler) UpdateClients(cfg *config.SDKConfig) { h.Cfg = cfg }
 
+// FilterModelsForCaller drops models the caller's access group cannot reach.
+func (h *BaseAPIHandler) FilterModelsForCaller(c *gin.Context, models []map[string]any) []map[string]any {
+	allowed := h.allowedProvidersForCaller(c)
+	if len(allowed) == 0 || len(models) == 0 {
+		return models
+	}
+	out := make([]map[string]any, 0, len(models))
+	for _, model := range models {
+		if modelProvidersAllowed(modelIDFromListEntry(model), allowed) {
+			out = append(out, model)
+		}
+	}
+	return out
+}
+
+// FilterModelInfosForCaller drops ModelInfo entries the caller's access group cannot reach.
+func (h *BaseAPIHandler) FilterModelInfosForCaller(c *gin.Context, infos []*registry.ModelInfo) []*registry.ModelInfo {
+	allowed := h.allowedProvidersForCaller(c)
+	if len(allowed) == 0 || len(infos) == 0 {
+		return infos
+	}
+	out := make([]*registry.ModelInfo, 0, len(infos))
+	for _, info := range infos {
+		if info != nil && modelProvidersAllowed(info.ID, allowed) {
+			out = append(out, info)
+		}
+	}
+	return out
+}
+
+func (h *BaseAPIHandler) allowedProvidersForCaller(c *gin.Context) map[string]struct{} {
+	if h == nil || h.Cfg == nil || c == nil {
+		return nil
+	}
+	rawKey, ok := c.Get("userApiKey")
+	if !ok || rawKey == nil {
+		return nil
+	}
+	return h.Cfg.AllowedProviderSetForAPIKey(fmt.Sprint(rawKey))
+}
+
+func modelIDFromListEntry(model map[string]any) string {
+	if model == nil {
+		return ""
+	}
+	if id, _ := model["id"].(string); strings.TrimSpace(id) != "" {
+		return strings.TrimSpace(id)
+	}
+	name, _ := model["name"].(string)
+	name = strings.TrimSpace(name)
+	return strings.TrimPrefix(name, "models/")
+}
+
+func modelProvidersAllowed(modelID string, allowed map[string]struct{}) bool {
+	if modelID == "" {
+		return false
+	}
+	for _, provider := range registry.GetGlobalRegistry().GetModelProviders(modelID) {
+		if config.ProviderAllowed(provider, allowed) {
+			return true
+		}
+	}
+	return false
+}
+
 // SetPluginHost configures the optional plugin interceptor host.
 func (h *BaseAPIHandler) SetPluginHost(host PluginInterceptorHost) {
 	if h == nil {
@@ -547,6 +613,11 @@ func (h *BaseAPIHandler) GetContextWithCancel(handler interfaces.APIHandler, c *
 	}
 	newCtx = context.WithValue(newCtx, "gin", c)
 	newCtx = context.WithValue(newCtx, "handler", handler)
+	if c != nil && h != nil && h.Cfg != nil {
+		if rawKey, ok := c.Get("userApiKey"); ok && rawKey != nil {
+			newCtx = coreauth.WithAllowedProviders(newCtx, h.Cfg.AllowedProvidersForAPIKey(fmt.Sprint(rawKey)))
+		}
+	}
 	return newCtx, func(params ...interface{}) {
 		if c != nil {
 			logging.SetResponseStatus(cancelCtx, c.Writer.Status())

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	internalconfig "github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/thinking"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/executor"
@@ -74,11 +75,36 @@ func isBuiltInSelector(selector Selector) bool {
 
 type requiredAuthKindContextKey struct{}
 type credentialPolicyContextKey struct{}
+type allowedProvidersContextKey struct{}
 
 type authSelectionEligibility struct {
-	requiredKind     string
-	credentialPolicy string
-	disallowFreeAuth bool
+	requiredKind      string
+	credentialPolicy  string
+	disallowFreeAuth  bool
+	allowedProviders  map[string]struct{}
+}
+
+// WithAllowedProviders restricts credential selection to the given provider keys.
+// An empty list leaves selection unrestricted.
+func WithAllowedProviders(ctx context.Context, providers []string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if len(providers) == 0 {
+		return ctx
+	}
+	set := make(map[string]struct{}, len(providers))
+	for _, provider := range providers {
+		provider = strings.ToLower(strings.TrimSpace(provider))
+		if provider == "" {
+			continue
+		}
+		set[provider] = struct{}{}
+	}
+	if len(set) == 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, allowedProvidersContextKey{}, set)
 }
 
 func withRequiredAuthKind(ctx context.Context, requiredKind string) context.Context {
@@ -102,6 +128,7 @@ func authSelectionEligibilityForRequest(ctx context.Context, opts cliproxyexecut
 	if ctx != nil {
 		eligibility.requiredKind, _ = ctx.Value(requiredAuthKindContextKey{}).(string)
 		eligibility.credentialPolicy, _ = ctx.Value(credentialPolicyContextKey{}).(string)
+		eligibility.allowedProviders, _ = ctx.Value(allowedProvidersContextKey{}).(map[string]struct{})
 	}
 	return eligibility
 }
@@ -116,7 +143,20 @@ func (e authSelectionEligibility) allows(auth *Auth) bool {
 	if e.credentialPolicy != "" && !credentialPolicyAllows(e.credentialPolicy, auth) {
 		return false
 	}
+	if len(e.allowedProviders) > 0 && !accessGroupAllowsAuth(auth, e.allowedProviders) {
+		return false
+	}
 	return !e.disallowFreeAuth || !isFreeCodexAuth(auth)
+}
+
+func accessGroupAllowsAuth(auth *Auth, allowed map[string]struct{}) bool {
+	if auth == nil {
+		return false
+	}
+	if internalconfig.ProviderAllowed(executorKeyFromAuth(auth), allowed) {
+		return true
+	}
+	return internalconfig.ProviderAllowed(auth.Provider, allowed)
 }
 
 func (m *Manager) syncSchedulerFromSnapshot(auths []*Auth) {
